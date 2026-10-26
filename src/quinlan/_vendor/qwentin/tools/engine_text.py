@@ -12,8 +12,19 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def engine_source_files(repo: str = REPO) -> list[str]:
     src = os.path.join(repo, "src")
-    with open(os.path.join(src, "forward_qwen.cu")) as f:
-        return [os.path.join(src, m.group(1)) for m in (re.match(r'#include "(engine/[\w.]+)"', ln) for ln in f) if m]
+    def visit(path, ancestors=()):
+        if path in ancestors:
+            raise ValueError("Cyclic engine include")
+        parts = []
+        with open(path) as f:
+            for line in f:
+                match = re.match(r'#include "(?:engine/)?([\w.]+\.cuh)"', line)
+                if match:
+                    part = os.path.join(src, 'engine', match.group(1))
+                    parts.append(part)
+                    parts.extend(visit(part, (*ancestors, path)))
+        return parts
+    return visit(os.path.join(src, "forward_qwen.cu"))
 
 
 def engine_source_text(repo: str = REPO) -> str:

@@ -28,3 +28,5 @@
 #include "engine/parking.cuh"
 #include "engine/paged_graph.cuh"
 #include "engine/paged_spec.cuh"
+
+#include "engine/quinlan_vision_api.cuh"

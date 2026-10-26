@@ -84,6 +84,14 @@ class FrontendTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, 400)
         caught.exception.close()
         self.assertEqual(self.eng.submits, before)
+    def test_image_without_tower_is_rejected_before_submission(self):
+        before = self.eng.submits
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.post({'messages':[{'role':'user','content':[{'type':'image_url',
+                'image_url':{'url':'data:image/png;base64,c3ludGhldGlj'}}]}]})
+        self.assertEqual(caught.exception.code,400)
+        caught.exception.close()
+        self.assertEqual(self.eng.submits,before)
     def test_configurable_model_and_context_discovery(self):
         config = adapter.ServerConfig("custom-model", 128, 32)
         server = adapter.ThreadingHTTPServer(("127.0.0.1", 0),

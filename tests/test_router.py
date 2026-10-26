@@ -79,6 +79,14 @@ class RouterTests(unittest.TestCase):
             self.assertEqual(response.headers["Content-Type"], "application/json")
             self.assertEqual(response.read(), b'{"model":"engine-id","timings":{"prompt_n":7},"extra":true}')
 
+    def test_image_content_is_forwarded_without_reformatting(self):
+        content = [{'type':'image_url','image_url':{'url':'data:image/png;base64,c3ludGhldGlj'}},
+                   {'type':'text','text':'Describe the image.'}]
+        body = {'model':'public-model','messages':[{'role':'user','content':content}]}
+        with self.post(body) as response:
+            response.read()
+        self.assertEqual(self.requests[-1][2],{**body,'model':'engine-id'})
+
     def test_auth_and_model_discovery(self):
         with self.assertRaises(urllib.error.HTTPError) as error:
             urllib.request.urlopen(self.url + "/v1/models")

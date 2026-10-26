@@ -324,7 +324,7 @@ __global__ void k_tq_full_attn_decode(float *out, const float *q_proj, const flo
     if (tid < rotary_dim) {
         int idx = tid & 31;
         float freq = powf(rope_theta, -((float)(2 * idx) / (float)rotary_dim));
-        float angle = (float)pos * freq;
+        float angle = (float)qv_rope_position(pos, idx) * freq;
         float c = cosf(angle);
         float s = sinf(angle);
         float q_pair = q_proj[head * (2 * hd) + ((tid < 32) ? tid + 32 : tid - 32)];

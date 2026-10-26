@@ -1,8 +1,10 @@
-recursive-include docs *.md
+recursive-include docs *.md *.json
 recursive-include examples *.json
-recursive-include tests *.py *.cu
+recursive-include tests *.py *.cu *.png
 recursive-include scripts *.py
 include CMakeLists.txt
 recursive-include src/quinlan/_vendor *
 global-exclude *.py[cod]
 global-exclude __pycache__
+global-exclude .DS_Store ._*
+prune src/quinlan/_vendor/qwentin/.pytest_cache

@@ -7,7 +7,8 @@
 `tools`, `temperature`, `top_p`, `top_k`, `min_p`, `seed`, `reasoning_effort`,
 and `chat_template_kwargs`. `tool_choice: "none"` disables tools; forced tool
 selection and strict structured output are not implemented. The model still
-determines whether and how it calls a tool. Messages are text-only.
+determines whether and how it calls a tool. With `--vision-model-dir`, user/tool
+content arrays may include base64 `image_url` parts; see [vision](vision.md).
 
 Defaults: temperature 1, top-p 0.95, top-k 20, min-p 0.05, random 64-bit seed,
 and xhigh thinking. Reasoning aliases: high/max → xhigh, minimal → low,
@@ -18,7 +19,7 @@ the Qwen template, including nested objects.
 
 Other OpenAI fields are not generally implemented or validated. In particular,
 do not assume support for `n`, custom stop sequences, penalties, logprobs,
-response schemas, or multimodal content.
+response schemas, video/audio, or network image URLs.
 
 ## Cache repair
 
@@ -72,6 +73,10 @@ or per-token timing is added. The qualified profile disables host KV restoration
 
 TTFT remains separate in `x_qwentin.server_ttft_s`. Missing, failed, zero-work,
 or invalid prefill measurements omit `timings`; TTFT is never substituted for PP.
+Image encoding/upload occurs before native prefill and is excluded from PP;
+`x_qwentin.vision.prepare_ms` reports that separate phase. It includes embedding
+cache lookup/upload and native position configuration, not HTTP image decoding
+or CPU preprocessing. Text TTFT retains its existing scheduler scope.
 The final choice event carries timings even without `include_usage`. Pi needs a
 timing extension that reads these fields to show PP; it can always receive the
 OpenAI-style cache usage fields when streaming usage is enabled.

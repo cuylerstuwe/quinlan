@@ -240,7 +240,7 @@ def ck(r, what):
 class Request:
     __slots__ = ("ids", "max_new", "eos", "out", "done", "slot", "pos", "next_tok",
                  "started", "t_admit", "t_first", "t_done", "n_prompt", "err",
-                 "start", "tokens", "t_submit", "sampling")
+                 "start", "tokens", "t_submit", "sampling", "input_state", "vision_metrics")
 
     def __init__(self, ids, max_new, eos):
         self.ids = ids; self.max_new = max_new; self.eos = set(eos)
@@ -373,8 +373,9 @@ class BatchedEngine:
         ck(self.L.qwn_paged_stats(ctypes.byref(fb), ctypes.byref(tb), ctypes.byref(pg), ctypes.byref(mb)), "stats")
         return fb.value, tb.value, pg.value, mb.value
 
-    def submit(self, ids, max_new, eos, sampling=None):
+    def submit(self, ids, max_new, eos, sampling=None, input_state=None):
         req = Request(ids, max_new, eos)
+        req.input_state = input_state
         req.sampling = sampling or (0.0, 1.0, 0, 0.0, 0)
         with self.cv:
             self.q.append(req)

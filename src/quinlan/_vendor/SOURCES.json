@@ -2579,11 +2579,11 @@
         "upstream_sha256": "f6bd1e31fd8b16140c7e3308b43ac4987c260f727515a544009bc0f21716c4ba"
       },
       "src/engine/attn_prefill.cuh": {
-        "sha256": "f3e3dd33ab5b4b751847f023a028a094a27641bac39d0de84b2f872f7d925929",
+        "sha256": "aedb7bd62ecc54b311f29ce8e5dfeaf15571050ca99ba143fe91b96ed7f43978",
         "upstream_sha256": "f3e3dd33ab5b4b751847f023a028a094a27641bac39d0de84b2f872f7d925929"
       },
       "src/engine/base.cuh": {
-        "sha256": "5286e4bfbb98a248429bb7199d91acdc6ef9203663476b2bb8123a0f63cae3bc",
+        "sha256": "137edb3ce7903040bdd9b0d8366fc3726b5c9507f6651b98742df4f647479e46",
         "upstream_sha256": "5286e4bfbb98a248429bb7199d91acdc6ef9203663476b2bb8123a0f63cae3bc"
       },
       "src/engine/config.cuh": {
@@ -2619,7 +2619,7 @@
         "upstream_sha256": "a2a85d66d37a7fa424273402b5883d488ff65d1f4a63da9034c67e49107fcca4"
       },
       "src/engine/load_quant.cuh": {
-        "sha256": "9f719802fde49d59711feac206ec6379df35aa81d96383ee4dc2406960eefa9d",
+        "sha256": "9c8253927bf03111fb2881a12c75538de9879984b6b65d37cb54e23f8a99d170",
         "upstream_sha256": "9f719802fde49d59711feac206ec6379df35aa81d96383ee4dc2406960eefa9d"
       },
       "src/engine/loader.cuh": {
@@ -2631,7 +2631,7 @@
         "upstream_sha256": "5ba22477a7e85dc06b0183c95aed6449ad8e3bb7dce6996eaa6e6547e52d1adf"
       },
       "src/engine/paged_attn.cuh": {
-        "sha256": "0a12bfafb927a9ebb3da47be508b520932e43b5840b2b40591e5058db688ee76",
+        "sha256": "68cd760086567fb4cd27514ace04790f9d0531ce35efb8cf574173c0ffb653ac",
         "upstream_sha256": "0a12bfafb927a9ebb3da47be508b520932e43b5840b2b40591e5058db688ee76"
       },
       "src/engine/paged_graph.cuh": {
@@ -2639,7 +2639,7 @@
         "upstream_sha256": "6369c920cb5a880490ea08a2f3af9fe55c478671b6ed84383693e42eccbb83d7"
       },
       "src/engine/paged_pool.cuh": {
-        "sha256": "0779a850d7e1e0998bab1bbb45febb1ef9325701e3e19cc9340b94ccd9e7ce51",
+        "sha256": "52cdd7719a5847d2ceb9923f0680523a33dd0b37bd69b59b198392272f1dfe4f",
         "upstream_sha256": "0779a850d7e1e0998bab1bbb45febb1ef9325701e3e19cc9340b94ccd9e7ce51"
       },
       "src/engine/paged_spec.cuh": {
@@ -2647,7 +2647,7 @@
         "upstream_sha256": "c7f55c9c6c93e75c6d6a389583ec6b78f4b9d04a939af1e7dfb24c5377d93d3a"
       },
       "src/engine/paged_t4.cuh": {
-        "sha256": "c434fbdd94fec70f02b185f79d4157c824695410c179b1dc40a06dc37b2ab734",
+        "sha256": "dab2a38ebb34032babfe8de751ac2b67e92beb1a509804ec2af90bd1d128d2bf",
         "upstream_sha256": "13baab9b8b6deb1bb53794b8f0c9e49193beda460f4cc104d342ad4267f7633b"
       },
       "src/engine/parking.cuh": {
@@ -2661,6 +2661,12 @@
       "src/engine/quinlan_sampling.cuh": {
         "sha256": "1af1ac90f35615c7b8ec9de3f2971a2a148f2b05b478086c2536474beda33b93"
       },
+      "src/engine/quinlan_vision.cuh": {
+        "sha256": "cedf32a24d23c7eb9a912453a4f237908559e08b5fa0296d86e8959160bd1852"
+      },
+      "src/engine/quinlan_vision_api.cuh": {
+        "sha256": "2bd207b5ecf33d09313f9c1653435e61b4452a6851fed743fd1a9c9af1db9945"
+      },
       "src/engine/t4_kv.cuh": {
         "sha256": "7064db0b654ea0d9e2b24c3cf158f247826d589377af4af6f9021b7a8bd092ab",
         "upstream_sha256": "7064db0b654ea0d9e2b24c3cf158f247826d589377af4af6f9021b7a8bd092ab"
@@ -2670,7 +2676,7 @@
         "upstream_sha256": "9b43f62e684b27e4c179c421983a108f162561d445a5f6e281d1f6255e28134a"
       },
       "src/forward_qwen.cu": {
-        "sha256": "bf4e002a64ed5b12a419fc46d86f413c2faa973a46c5d7c63a087a6d7677a9cf",
+        "sha256": "370b2f9aac7235ab2494c5a5ff958b2bfe9cf392e0329dcdbcd2330fe48095d1",
         "upstream_sha256": "a2c87bb8298d84ad01a4e6a4899d42c2a02e73da6e044669607ae97d95c6c0fe"
       },
       "src/qwentin.h": {
@@ -2742,7 +2748,7 @@
         "upstream_sha256": "78dff5210ead91d3171d3e62d3b65e817768f2088f5646dd719cd3f28b28a9fd"
       },
       "tools/engine_text.py": {
-        "sha256": "9128cba27e610cbac66e976c767ce386b34981215f71d16dd777f60b59a59a89",
+        "sha256": "ce1bce28193d9700db4448e2cf407b7107f865cf0e1bfd304135594b2b08ccaa",
         "upstream_sha256": "9128cba27e610cbac66e976c767ce386b34981215f71d16dd777f60b59a59a89"
       },
       "tools/evalplus.sh": {
@@ -2802,7 +2808,7 @@
         "upstream_sha256": "f984d4bc2593f24fb7ffe316ae591dd3a8cf5687f676128642a7953c02f65d18"
       },
       "tools/serve_batched.py": {
-        "sha256": "34a2ffd3ae1c734a656ccd5b48af001c5f4f6e870e7771cff08f2d134d5f8395",
+        "sha256": "49e6251a7a7ba902ca2a332403c0c34d73691cc0995ac10574761b1e234cd6fc",
         "upstream_sha256": "41b350b00badeaa9c4e1bca37d8c338b7425bd2387528d3d4869fbca2d2143d8"
       },
       "tools/serve_common.py": {

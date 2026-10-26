@@ -73,7 +73,7 @@ __global__ void __launch_bounds__(256) k_tq_paged_attn_q4_gqa_mma(
         if (tid < 64) {
             int idx = tid & 31;
             float freq = powf(rope_theta, -((float)(2 * idx) / 64.0f));
-            float angle = (float)pos * freq, c = cosf(angle), s = sinf(angle);
+            float angle = (float)qv_rope_position(pos, idx) * freq, c = cosf(angle), s = sinf(angle);
             float q_pair = q_proj[hh * (2 * hd) + ((tid < 32) ? tid + 32 : tid - 32)];
             q_pair = q_pair * rsqrtf(qss / (float)hd + eps) * (1.0f + tq_bf16_to_float(q_norm_w[(tid < 32) ? tid + 32 : tid - 32]));
             float q_rot = (tid < 32) ? -q_pair : q_pair;
@@ -438,7 +438,7 @@ __global__ void __launch_bounds__(256, TQ_AST_MINB) k_tq_paged_attn_q4_gqa_mma_s
         if (tid < 64) {
             int idx = tid & 31;
             float freq = powf(rope_theta, -((float)(2 * idx) / 64.0f));
-            float angle = (float)pos * freq, c = cosf(angle), s = sinf(angle);
+            float angle = (float)qv_rope_position(pos, idx) * freq, c = cosf(angle), s = sinf(angle);
             float q_pair = q_proj[hh * (2 * hd) + ((tid < 32) ? tid + 32 : tid - 32)];
             q_pair = q_pair * rsqrtf(qss / (float)hd + eps) * (1.0f + tq_bf16_to_float(q_norm_w[(tid < 32) ? tid + 32 : tid - 32]));
             float q_rot = (tid < 32) ? -q_pair : q_pair;
@@ -800,7 +800,7 @@ __global__ void __launch_bounds__(256) k_tq_paged_attn_q4_gqa_seg(
         if (tid < 64) {
             int idx = tid & 31;
             float freq = powf(rope_theta, -((float)(2 * idx) / 64.0f));
-            float angle = (float)pos * freq, c = cosf(angle), s = sinf(angle);
+            float angle = (float)qv_rope_position(pos, idx) * freq, c = cosf(angle), s = sinf(angle);
             float q_pair = q_proj[hh * (2 * hd) + ((tid < 32) ? tid + 32 : tid - 32)];
             q_pair = q_pair * rsqrtf(qss / (float)hd + eps) * (1.0f + tq_bf16_to_float(q_norm_w[(tid < 32) ? tid + 32 : tid - 32]));
             float q_rot = (tid < 32) ? -q_pair : q_pair;
@@ -1228,7 +1228,7 @@ __global__ void __launch_bounds__(256, 2) k_tq_paged_attn_q4_gqa_f16(
         if (tid < 64) {
             int idx = tid & 31;
             float freq = powf(rope_theta, -((float)(2 * idx) / 64.0f));
-            float angle = (float)pos * freq, c = cosf(angle), s = sinf(angle);
+            float angle = (float)qv_rope_position(pos, idx) * freq, c = cosf(angle), s = sinf(angle);
             float q_pair = q_proj[hh * (2 * hd) + ((tid < 32) ? tid + 32 : tid - 32)];
             q_pair = q_pair * rsqrtf(qss / (float)hd + eps) * (1.0f + tq_bf16_to_float(q_norm_w[(tid < 32) ? tid + 32 : tid - 32]));
             float q_rot = (tid < 32) ? -q_pair : q_pair;
@@ -1804,7 +1804,7 @@ __global__ void __launch_bounds__(256) k_tq_paged_attn_q4_gqa_seg_t4(
         if (tid < 64) {
             int idx = tid & 31;
             float freq = powf(rope_theta, -((float)(2 * idx) / 64.0f));
-            float angle = (float)pos * freq, c = cosf(angle), s = sinf(angle);
+            float angle = (float)qv_rope_position(pos, idx) * freq, c = cosf(angle), s = sinf(angle);
             float q_pair = q_proj[hh * (2 * hd) + ((tid < 32) ? tid + 32 : tid - 32)];
             q_pair = q_pair * rsqrtf(qss / (float)hd + eps) * (1.0f + tq_bf16_to_float(q_norm_w[(tid < 32) ? tid + 32 : tid - 32]));
             float q_rot = (tid < 32) ? -q_pair : q_pair;

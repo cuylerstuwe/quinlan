@@ -129,7 +129,7 @@ __global__ void k_tq_paged_attn_kv_write_q4(
     if (tid < rotary_dim) {
         int idx = tid & 31;
         float freq = powf(rope_theta, -((float)(2 * idx) / (float)rotary_dim));
-        float angle = (float)pos * freq;
+        float angle = (float)qv_rope_position(pos, idx) * freq;
         float c = cosf(angle), s = sinf(angle);
         float k_pair = k_proj[kv_head * hd + ((tid < 32) ? tid + 32 : tid - 32)];
         k_pair = k_pair * rsqrtf(k_sum_shared / (float)hd + eps) * (1.0f + tq_bf16_to_float(k_norm_w[(tid < 32) ? tid + 32 : tid - 32]));
@@ -402,7 +402,7 @@ __global__ void k_tq_paged_attn_q4(
     if (tid < rotary_dim) {
         int idx = tid & 31;
         float freq = powf(rope_theta, -((float)(2 * idx) / (float)rotary_dim));
-        float angle = (float)pos * freq;
+        float angle = (float)qv_rope_position(pos, idx) * freq;
         float c = cosf(angle), s = sinf(angle);
         float q_pair = q_proj[head * (2 * hd) + ((tid < 32) ? tid + 32 : tid - 32)];
         q_pair = q_pair * rsqrtf(q_sum_shared / (float)hd + eps) * (1.0f + tq_bf16_to_float(q_norm_w[(tid < 32) ? tid + 32 : tid - 32]));
@@ -579,7 +579,7 @@ __global__ void k_tq_paged_attn_q4_split(
     if (tid < rotary_dim) {
         int idx = tid & 31;
         float freq = powf(rope_theta, -((float)(2 * idx) / (float)rotary_dim));
-        float angle = (float)pos * freq;
+        float angle = (float)qv_rope_position(pos, idx) * freq;
         float c = cosf(angle), s = sinf(angle);
         float q_pair = q_proj[head * (2 * hd) + ((tid < 32) ? tid + 32 : tid - 32)];
         q_pair = q_pair * rsqrtf(q_sum_shared / (float)hd + eps) * (1.0f + tq_bf16_to_float(q_norm_w[(tid < 32) ? tid + 32 : tid - 32]));

@@ -116,7 +116,7 @@ __global__ void k_tq_wide_attn_mma(
         if (tid < 64) {
             int idx = tid & 31;
             float freq = powf(rope_theta, -((float)(2 * idx) / 64.0f));
-            float angle = (float)pos * freq, c = cosf(angle), s = sinf(angle);
+            float angle = (float)qv_rope_position(pos, idx) * freq, c = cosf(angle), s = sinf(angle);
             float q_pair = q_proj[head * (2 * hd) + ((tid < 32) ? tid + 32 : tid - 32)];
             q_pair = q_pair * rsqrtf(qss / (float)hd + eps) * (1.0f + tq_bf16_to_float(q_norm_w[(tid < 32) ? tid + 32 : tid - 32]));
             float q_rot = (tid < 32) ? -q_pair : q_pair;
@@ -863,7 +863,7 @@ __global__ void __launch_bounds__(256, 1) k_tq_pattn_t4(
                     for (int e = 0; e < 8; e++) x[e] = x[e] * nrm * (1.0f + tq_bf16_to_float(q_norm_w[lane + 32 * e]));
                     // partial rope over dims 0..63: pairs (lane, lane + 32) = (x[0], x[1])
                     const float freq = powf(rope_theta, -((float)(2 * lane) / 64.0f));
-                    const float angle = (float)pos * freq, c = cosf(angle), s = sinf(angle);
+                    const float angle = (float)qv_rope_position(pos, lane) * freq, c = cosf(angle), s = sinf(angle);
                     const float x0 = x[0], x1 = x[1];
                     x[0] = x0 * c - x1 * s;
                     x[1] = x1 * c + x0 * s;

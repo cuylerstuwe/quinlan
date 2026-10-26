@@ -47,6 +47,35 @@ without writing into site-packages.
 These checks qualify packaging, native ABI/build and the sampling algorithm.
 They do not constitute a new full-model quality or long-context performance benchmark.
 
+## Version 0.3.0 image checks
+
+- 61 API/router/build/cache/media CPU tests passed with the real tokenizer.
+- 84 bundled-engine tests passed against the CUDA 13.1 build on an RTX 5090.
+- The independent Transformers oracle matched three image-grid cases, all 32
+  rotary frequency selections, device visual rows, generated-token positional
+  deltas, and the return to ordinary text positions.
+- 18 direct API checks and 19 routed checks passed, including color, spatial
+  layout, OCR, multiple images, a 2048-square image with 4,096 visual tokens,
+  queued image requests, tools, SSE metadata, and seeded stochastic output.
+- An image/tool follow-up reused all 384 consumed tokens; appending an image
+  reused all 427 eligible tokens. Replacing the old image produced the updated
+  answer with zero cached tokens.
+- The installed Pi provider completed an image/tool/answer round trip through
+  a separate router, preserved its full consumed prefix, and its installed
+  prefill parser detected the native PP fields.
+- A 262,080-token image-containing prompt answered correctly through the router,
+  with a configured 262,144-token limit. Prefill took approximately 160 seconds.
+- Two deterministic text smoke fixtures returned identical messages before and
+  after the change. Measured decode rates were approximately 131→131 and
+  122→122 tokens/s. These single comparisons are not a controlled speed estimate.
+
+[Sanitized numeric receipt](evidence/vision-0.3.0.json) records the configuration,
+cases and limitations. The fixtures are synthetic and contain no personal data.
+These checks establish the measured integration paths, not universal image
+accuracy or reasoning quality throughout 256K. Video/audio and URL fetching are
+not supported. Interleaved conversations can still evict the single parked GPU
+prefix; a CPU image-embedding hit is not a KV-cache hit.
+
 ## GPU sampler oracle
 
 With CUDA Toolkit 13.1 and CUDA PyTorch on the RTX 5090:

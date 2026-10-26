@@ -298,6 +298,7 @@ def make_handler(eng, tok, api_key, parse_tools, config=None):
     config = config or ServerConfig()
     model, context, max_output = config.model, config.context_window, config.max_output
     history = TokenHistory()
+    vision = getattr(eng, 'vision', None)
     eos = {tok.eos_token_id}
     for name in ["<|im_end|>", "<|endoftext|>"]:
         v = tok.convert_tokens_to_ids(name)
@@ -345,13 +346,16 @@ def make_handler(eng, tok, api_key, parse_tools, config=None):
                     "spec_sampling": getattr(eng, "spec_sampling", "probability"), "prefilling": len(eng.prefills),
                     "engine_configuration": getattr(eng, "runtime_info", {}),
                     "embedding": "bf16_gpu", "kv": "trellis4", "host_kv_offload": False,
+                    "input_modalities": ["text", "image"] if vision else ["text"],
                     "prefilled_tokens": eng.prefilled_tokens, "decoded_tokens": eng.decoded_tokens,
                     "cache_hits": eng.cache_hits, "cache_tokens": eng.cache_tokens,
                     "token_history": history.stats(),
                     "prefill_timing": "server_prefill_wall" if hasattr(eng, "prefill_telemetry") else None})
             elif self.path.rstrip("/") == "/v1/models":
                 self.send_json(200, {"object": "list", "data": [{"id": model, "object": "model", "owned_by": "local",
-                    "context_window": context, "max_tokens": max_output, "sampling": "temperature_top_k_top_p_min_p"}]})
+                    "context_window": context, "max_tokens": max_output,
+                    "input_modalities": ["text", "image"] if vision else ["text"],
+                    "sampling": "temperature_top_k_top_p_min_p"}]})
             else:
                 self.send_json(404, {"error": {"message": "Unknown endpoint"}})
 
@@ -383,11 +387,22 @@ def make_handler(eng, tok, api_key, parse_tools, config=None):
                 if body.get("tool_choice") == "none":
                     tools = None
                 msgs = prepare_messages(body.get("messages", []))
-                prompt = tok.apply_chat_template(msgs, tools=tools, tokenize=False, add_generation_prompt=True, **opts)
-                ids, preserved = history.resolve(tok, msgs, tools, opts, prompt)
+                request_tok, input_state = tok, None
+                if vision:
+                    msgs, request_tok, input_state = vision.prepare(msgs, tok)
+                elif any(isinstance(m.get('content'), list) and any(
+                        p.get('type') not in ('text',) for p in m['content'] if isinstance(p, dict)) for m in msgs):
+                    raise ValueError('This server has no vision tower; launch with --vision-model-dir')
+                prompt = request_tok.apply_chat_template(msgs, tools=tools, tokenize=False, add_generation_prompt=True, **opts)
+                ids, preserved = history.resolve(request_tok, msgs, tools, opts, prompt)
+                if input_state:
+                    from .vision import visual_ids, position_ids
+                    ids = visual_ids(ids, vision.image_token_id, input_state.tokens)
+                    input_state.positions, input_state.delta = position_ids(ids, [image.grid for image in input_state.images])
                 if len(ids) + limit > context:
                     raise ValueError(f"Prompt ({len(ids)}) plus requested output ({limit}) exceeds {context} tokens")
-                req = eng.submit(list(ids), limit, list(eos), sampling=sampling)
+                extra = {'input_state': input_state} if vision else {}
+                req = eng.submit(list(ids), limit, list(eos), sampling=sampling, **extra)
                 cid = "chatcmpl-" + uuid.uuid4().hex
                 created = int(time.time())
                 base = {"id": cid, "object": "chat.completion.chunk", "created": created, "model": model}
@@ -459,7 +474,7 @@ def make_handler(eng, tok, api_key, parse_tools, config=None):
                     message["tool_calls"] = calls
                 # Publish before the terminal response/SSE events so an immediate
                 # tool continuation can find the exact completed token history.
-                history.remember(tok, msgs, tools, opts, ids, req.out, eos, message)
+                history.remember(request_tok, msgs, tools, opts, ids, req.out, eos, message)
                 finish = "tool_calls" if calls else ("length" if len(req.out) >= limit else "stop")
                 usage = {"prompt_tokens": req.n_prompt, "completion_tokens": len(req.out),
                     "total_tokens": req.n_prompt + len(req.out), "prompt_tokens_details": {"cached_tokens": req.start}}
@@ -471,6 +486,8 @@ def make_handler(eng, tok, api_key, parse_tools, config=None):
                     "token_history_preserved_tokens": preserved,
                     "server_ttft_s": ttft, "decode_seconds": decode_s,
                     "decode_tokens_per_second": max(0, len(req.out)-1) / decode_s if decode_s > 0 else None}
+                if vision:
+                    metrics['vision'] = getattr(req, 'vision_metrics', {})
                 if stream:
                     delta({"reasoning_content": reasoning[sent_reasoning:]} if len(reasoning) > sent_reasoning else {})
                     if len(content) > sent_content:
@@ -512,6 +529,7 @@ def parse_args(argv=None):
     ap.add_argument("--source", help="optional alternative Qwentin source; default is bundled")
     ap.add_argument("--lib", help="optional native library path; default is quinlan-build's output")
     ap.add_argument("--model-dir", required=True)
+    ap.add_argument("--vision-model-dir", help="optional checkpoint containing BF16 model.visual.* tensors and processor config")
     ap.add_argument("--tqf", required=True)
     ap.add_argument("--api-key-file", required=True)
     ap.add_argument("--model-id", default=MODEL)
@@ -559,7 +577,8 @@ def create_engine(args):
     cfg = {"TQ_WIDE_ATTN_MMA": 1, "TQ_EMBED_HOST": 0, "TQ_NO_MTP": 0, "TQ_KV_V4": 1,
            "TQ_KV_T4": 1, "TQ_PDL": 1, "TQ_DSTATE_BF16": 4, "TQ_GDN_PREFILL": 1,
            "TQ_DRAFT_VOCAB": int(args.draft_vocab == "reduced")}
-    class TimedEngine(PrefillTimingMixin, BatchedEngine):
+    from .vision import VisionEngineMixin
+    class TimedEngine(VisionEngineMixin, PrefillTimingMixin, BatchedEngine):
         pass
     eng = TimedEngine(lib, args.tqf, 1, args.num_blocks, 128, prefill_waves_per_step=2, mixed_prefill=True,
         prefix_cache=True, park_ram_bytes=0, decode_steps_per_wave=1, spec=not args.no_spec,
@@ -581,6 +600,10 @@ def create_engine(args):
     eng.runtime_info = {**expected, "weight_device_bytes": lib.qwn_device_bytes(),
         "max_blocks_per_sequence": eng.max_blocks_per_seq, "pool_blocks": eng.num_blocks,
         "host_park_budget": eng.park_ram_bytes}
+    if args.vision_model_dir:
+        from .vision import VisionTower
+        vision_config = json.loads((Path(args.model_dir) / 'config.json').read_text())['vision_config']
+        eng.vision = VisionTower(args.vision_model_dir, lib, expected_config=vision_config)
     return eng, tok, parse_tool_calls
 
 def main():

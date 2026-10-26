@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-26",
+  "version": "0.3.0",
+  "status": "pass",
+  "platform": {
+    "gpu": "RTX 5090",
+    "cuda_toolkit": "13.1",
+    "python": "3.12",
+    "torch": "2.14.0+cu130",
+    "transformers": "5.17.0",
+    "pillow": "13.0.0"
+  },
+  "configuration": {
+    "context_window": 262144,
+    "max_output_tokens": 32768,
+    "main_quant_target_bpw": 5.75,
+    "vision_dtype": "bfloat16",
+    "kv": "trellis4",
+    "active_sequences": 1,
+    "host_kv_offload": false
+  },
+  "cpu_tests": 61,
+  "native_engine_tests": 84,
+  "native_oracle": {
+    "position_grids": 3,
+    "device_frequencies_checked": 32,
+    "visual_embedding_rows_checked": 2,
+    "generated_position_delta": true,
+    "text_reset": true,
+    "status": "pass"
+  },
+  "api": {
+    "direct_checks": 18,
+    "router_checks": 19,
+    "all_passed": true,
+    "cache_cases": {
+      "image_tool_followup": {
+        "cached_tokens": 384,
+        "processed_tokens": 42
+      },
+      "appended_image": {
+        "cached_tokens": 427,
+        "processed_tokens": 99
+      },
+      "replaced_image": {
+        "cached_tokens": 0,
+        "processed_tokens": 442
+      }
+    },
+    "large_image_visual_tokens": 4096
+  },
+  "installed_pi": {
+    "installed_pi_runtime": true,
+    "image_capability_advertised": true,
+    "image_tool_answer_correct": true,
+    "followup_answer_correct": true,
+    "full_consumed_prefix_reused": true,
+    "installed_prefill_parser_passed": true
+  },
+  "near_context_limit": {
+    "via_router": true,
+    "prompt_tokens": 262080,
+    "image_tokens": 64,
+    "correct_image_answer": true,
+    "prefill_seconds": 160.189401519
+  },
+  "text_comparison": [
+    {
+      "prompt_tokens": 3832,
+      "response_identical": true,
+      "before_decode_tps": 131.0415289751768,
+      "after_decode_tps": 130.6232717772436
+    },
+    {
+      "prompt_tokens": 32332,
+      "response_identical": true,
+      "before_decode_tps": 122.04980455593183,
+      "after_decode_tps": 121.70341264317972
+    }
+  ],
+  "limitations": [
+    "Sparse synthetic fixtures do not establish broad image/reasoning quality.",
+    "Two single text baselines are a regression smoke check, not a controlled performance estimate.",
+    "Still-image base64 attachments only; video, audio and URL fetching are unsupported."
+  ]
+}

@@ -436,11 +436,14 @@ static __device__ __forceinline__ uint8_t tq_qmma_a_byte(const uint8_t *a, int K
     return a[((mt * Kt + kt) * 512) + lane * 16 + byte_idx];
 }
 
+#include "quinlan_vision.cuh"
+
 // One embedding element for token `row`, channel `i` (TQ_EMBED_FP8). mode 0 is the
 // bit-exact bf16 default; mode 1 dequants per-row-scaled E4M3; mode 2 dequants
 // per-row-scaled E2M3 packed 6-bit (4 codes / 3 bytes, requires H % 4 == 0).
 static __device__ __forceinline__ float tq_embed_lookup_one(const uint16_t *embed,
                                                             size_t row, int i, int H) {
+    if ((int64_t)row < 0) return qv_embedding(row, i, H);
     int mode = gc_embed_mode;
     if (mode == 0) return tq_bf16_to_float(embed[row * (size_t)H + i]);
     if (mode == 1) {

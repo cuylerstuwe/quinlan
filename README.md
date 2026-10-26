@@ -2,7 +2,8 @@
 
 A complete Qwentin serving stack in one repository: CUDA inference engine,
 continuous-batching scheduler, OpenAI-style chat API, model-alias router,
-exact token-history preservation, Pi prefill telemetry, and conversion tools.
+exact token-history preservation, optional BF16 image understanding, Pi prefill
+telemetry, and conversion tools.
 
 Qwentin and ExLlamaV3 source is checked in as regular files. Building, serving,
 routing, and conversion require no submodules, external source checkouts, or
@@ -28,6 +29,8 @@ reasoning quality throughout that context.
   preambles, reasoning extraction, JSON argument reformatting, and tool parsing.
 - Pi-compatible processed-token counts, measured prefill wall time, PP tokens/sec,
   and actual cached tokens. TTFT is reported separately.
+- Optional Qwen image encoder, native visual-embedding input and three-axis RoPE,
+  with image-aware prompt caching and a bounded CPU embedding cache.
 - An authenticated model-alias router that translates the request model ID and
   passes response bytes, including timing/cache/usage extensions, unchanged.
 - Tests, example Pi/router configs, upstream licenses, revisions, and file hashes.
@@ -98,6 +101,12 @@ of 128. Startup verifies effective context, embedding placement, state precision
 KV format, and disabled host parking. Prompt plus requested output must fit the
 context window.
 
+To enable image attachments, install `.[inference,vision]` and add
+`--vision-model-dir "$VISION_MODEL_DIR"`. This directory must contain matching
+BF16 `model.visual.*` safetensors, `config.json`, and `preprocessor_config.json`.
+The TQF remains the quantized text/MTP component; it does not contain the tower.
+See [vision setup, API examples, limits, and cache behavior](docs/vision.md).
+
 `GET /health` on the backend is unauthenticated and exposes numeric counters and
 configuration, not prompts. Keep it on a trusted interface. Both services use
 plain HTTP; provide your own TLS proxy or private tunnel for remote access.
@@ -114,7 +123,9 @@ export QUINLAN_ROUTER_KEY="$(python -c 'import secrets; print(secrets.token_urls
 quinlan-router examples/router.json
 ```
 
-The example exposes `qwen-local` at `http://127.0.0.1:8787/v1`. Change its backend
+The example exposes `qwen-local` at `http://127.0.0.1:8787/v1` and advertises image
+input, so run the backend with its vision option or change the examples to text
+only. Change its backend
 URL for a separate host. Response `model` fields retain the backend model ID;
 JSON/SSE response bytes pass through unchanged. The router does not retry, fail
 over, or reformat history. Deployment-specific priority controllers are outside
@@ -159,8 +170,8 @@ The upstream commits and modifications are documented in
 calibration datasets and raw deployment logs are not distributed. Credentials, private addresses/hostnames/paths, and personal
 configuration are excluded. Commit metadata uses a neutral contributor identity.
 
-This is an experimental text-chat/tool integration with one active sequence. It
-has no vision or embeddings endpoint, enforced JSON grammar, persistent
+This is an experimental text/image chat and tool integration with one active
+sequence. It has no video/audio support, embeddings endpoint, enforced JSON grammar, persistent
 conversation storage, or native priority scheduling. Token/template history is
 bounded in RAM. Restarting, eviction, interleaving conversations, or genuine
 history edits can legitimately cause a cold prefill. MIT license; bundled

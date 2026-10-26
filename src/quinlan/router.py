@@ -18,12 +18,15 @@ class Route:
     api_key: str = ""
     context_window: int | None = None
     max_output_tokens: int | None = None
+    input_modalities: tuple = ("text",)
 
     def __post_init__(self):
         url = urlsplit(self.base_url)
         if (url.scheme not in {"http", "https"} or not url.hostname or
                 url.username or url.password or url.query or url.fragment or not self.model):
             raise ValueError("Route needs an HTTP(S) base URL without credentials and a model ID")
+        if not self.input_modalities or any(x not in ('text', 'image') for x in self.input_modalities):
+            raise ValueError('Supported input modalities are text and image')
 
 
 def make_handler(routes, api_key, max_body_bytes=32 * 2**20, timeout=1800):
@@ -65,6 +68,7 @@ def make_handler(routes, api_key, max_body_bytes=32 * 2**20, timeout=1800):
                 data = []
                 for alias, route in routes.items():
                     item = {"id": alias, "object": "model", "owned_by": "local"}
+                    item['input_modalities'] = list(route.input_modalities)
                     if route.context_window is not None:
                         item["context_window"] = route.context_window
                     if route.max_output_tokens is not None:
