@@ -9,11 +9,43 @@ provenance. Real-tokenizer tests additionally exercise original-token replay
 across repeated tool turns, equivalent API argument encodings, edited histories,
 context-dependent templates, length-limited output, and bounded storage.
 
-Set `QWENTIN_SOURCE` to a checkout containing the supported commit for overlay
-checks. Set `QWENTIN_MODEL_DIR` to the matching local tokenizer directory for the
-real-tokenizer tests. Those tests need tokenizer/config/template files only;
-they do not load model weights or initialize CUDA. Missing optional inputs cause
-explicit skips, not successful inference claims.
+All engine/build/overlay inputs come from the included source tree. No upstream
+checkout, Git metadata, or network access is required for these checks. The
+legacy external-checkout patch utility is tested against source reconstructed
+from the bundled snapshot. `quinlan-build --verify-only` checks every included
+source/asset against its manifest.
+
+Set `QWENTIN_MODEL_DIR` to matching local tokenizer/config/template files for the
+real-tokenizer tests. They do not load model weights or initialize CUDA. Missing
+that optional input produces explicit skips. CI tests the installed package and
+the bundled engine's CPU tests on Python 3.10, 3.12 and 3.14.
+
+To include native ABI/configuration and TQF integrity checks after a build:
+
+```sh
+QWENTIN_LIB="$(python -c 'from quinlan.bundled import library_path; print(library_path())')" \
+  python -m pytest src/quinlan/_vendor/qwentin/tests -q
+```
+
+The source archive and wheel are checked for complete native/conversion assets,
+nested licenses, matching hashes and absence of generated binaries/bytecode.
+Build output is separate from bundled sources, so an installed wheel can build
+without writing into site-packages.
+
+## Version 0.2.0 checks
+
+- 52 API/router/build/cache tests passed with the real tokenizer available.
+- 84 bundled-engine tests passed against a CUDA 13.1 build on an RTX 5090.
+  Without a compiled library, the CPU-only run passed 77 and explicitly skipped seven.
+- The device sampler matched CPU oracles across seven filtering regimes and five
+  probability-verifier cases, including two reduced-vocabulary pipeline cases,
+  greedy preservation and batch-partition reproducibility.
+- The source archive and installed wheel include every manifest file, nested
+  licenses and required codebook/vocabulary asset, with calibration datasets,
+  generated binaries and bytecode excluded.
+
+These checks qualify packaging, native ABI/build and the sampling algorithm.
+They do not constitute a new full-model quality or long-context performance benchmark.
 
 ## GPU sampler oracle
 

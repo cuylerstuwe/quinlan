@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quinlan"
-version = "0.1.0"
+version = "0.2.0"
 description = "Qwentin serving with OpenAI-style chat, exact token history, and Pi prefill telemetry"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,14 +14,25 @@ dependencies = []
 
 [project.optional-dependencies]
 tokenizer = ["transformers==5.17.0", "tokenizers==0.23.2", "jinja2>=3.1.6"]
+inference = ["torch==2.14.0+cu130", "transformers==5.17.0", "tokenizers==0.23.2", "jinja2>=3.1.6", "safetensors==0.8.0", "numpy==2.5.3", "httpx==0.28.1"]
+conversion = ["rich", "typing_extensions", "ninja", "pillow", "pyyaml==6.0.3", "marisa_trie", "pydantic", "llguidance>=1.7.0"]
+dev = ["pytest==9.1.1"]
 
 [project.scripts]
 quinlan-serve = "quinlan.server:main"
 quinlan-router = "quinlan.router:main"
 quinlan-patch = "quinlan.patch:main"
+quinlan-build = "quinlan.build:main"
+quinlan-convert = "quinlan.convert:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["quinlan*"]
+exclude = ["*.__pycache__"]
+namespaces = true
 
 [tool.setuptools.package-data]
-quinlan = ["native/*.cuh", "native/*.patch"]
+quinlan = ["native/*.cuh", "native/*.patch", "_vendor/**/*"]
+
+[tool.setuptools.exclude-package-data]
+quinlan = ["**/__pycache__/*", "**/*.pyc", "**/*.pyo", "**/*.so", "**/*.log"]

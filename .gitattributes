@@ -1,2 +1,4 @@
 # Unified patches have intentional single-space context lines.
 *.patch -whitespace
+# Keep the original formatting of the pinned third-party snapshots.
+src/quinlan/_vendor/** -whitespace

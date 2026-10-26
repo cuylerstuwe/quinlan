@@ -23,6 +23,8 @@ import threading
 import time
 import uuid
 
+from .bundled import library_path, source_dir
+
 CONTEXT = 262144
 MAX_OUTPUT = 32768
 MODEL = "qwen3.8-27b-qwentin-opt5.75-256k"
@@ -507,7 +509,8 @@ def make_handler(eng, tok, api_key, parse_tools, config=None):
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", required=True)
+    ap.add_argument("--source", help="optional alternative Qwentin source; default is bundled")
+    ap.add_argument("--lib", help="optional native library path; default is quinlan-build's output")
     ap.add_argument("--model-dir", required=True)
     ap.add_argument("--tqf", required=True)
     ap.add_argument("--api-key-file", required=True)
@@ -528,16 +531,27 @@ def parse_args(argv=None):
         ap.error("--max-output must be positive and smaller than --context-window")
     if args.num_blocks * 128 < args.context_window:
         ap.error("--num-blocks provides less KV capacity than --context-window")
+    if args.source:
+        args.source = str(Path(args.source).expanduser().resolve())
+        if not args.lib:
+            built = library_path(args.source)
+            legacy = Path(args.source) / "build-qwen/libforward_qwen.so"
+            args.lib = str(legacy if legacy.is_file() and not built.is_file() else built)
+    else:
+        args.source = str(source_dir())
+        args.lib = args.lib or str(library_path())
     return args
 
 def create_engine(args):
+    if not Path(args.lib).is_file():
+        raise FileNotFoundError("Native engine is not built; run quinlan-build, or pass --lib for an existing build")
     os.environ.update(TQ_CTX=str(args.context_window), TQ_EMBED_HOST="0", TQ_EMBED_FP8="0", TQ_PARK_RING="0")
     sys.path.insert(0, args.source)
     from tools.serve_batched import BatchedEngine, load_lib
     from .tool_parser import parse_tool_calls
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True)
-    lib = load_lib(str(Path(args.source) / "build-qwen/libforward_qwen.so"))
+    lib = load_lib(args.lib)
     import ctypes
     lib.quinlan_spec_set_mode.argtypes = [ctypes.c_int]
     lib.quinlan_spec_set_mode.restype = None

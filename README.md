@@ -1,97 +1,112 @@
 # Quinlan
 
-An OpenAI-style chat API for [Qwentin](https://github.com/kacper-daftcode/qwentin),
-with exact token-history preservation, Pi-compatible prefill measurements, and
-GPU sampling with speculative decoding. Includes an optional model-alias router.
+A complete Qwentin serving stack in one repository: CUDA inference engine,
+continuous-batching scheduler, OpenAI-style chat API, model-alias router,
+exact token-history preservation, Pi prefill telemetry, and conversion tools.
+
+Qwentin and ExLlamaV3 source is checked in as regular files. Building, serving,
+routing, and conversion require no submodules, external source checkouts, or
+patch step. The source archive and Python wheel include the same source assets.
+CUDA/PyTorch, other Python packages, system build tools, and model weights/tokenizer
+files and conversion calibration data remain external requirements.
 
 The initial profile targets **Qwen3.8 27B, EXL3 opt-5.75, on a 32 GB RTX 5090**:
 262,144 total context tokens, up to 32,768 output tokens, GPU-resident BF16
-embeddings, trellis4 KV, and one active sequence. Capacity depends on the exported
-weights and runtime configuration. A 256K capacity does not establish equal
-reasoning quality across that whole context.
+embeddings, trellis4 KV, and one active sequence. Actual capacity depends on the
+export and runtime configuration. A 256K capacity does not establish equal
+reasoning quality throughout that context.
 
 ## Included
 
+- CUDA inference source, C ABI, Python scheduler, TQF loader/exporter, codebooks,
+  reduced draft vocabulary, quantization recipes, and conversion source.
+- Temperature, top-k, top-p, min-p, seeded sampling, and probability-based MTP
+  acceptance/rejection with residual sampling. Temperature zero retains greedy decoding.
 - Authenticated `/v1/models` and `/v1/chat/completions`, JSON or SSE, separated
   reasoning, parsed function calls, and optional streaming usage.
-- Prompt-cache repair across assistant/tool round trips. Original generated token
-  IDs survive JSON argument reformatting, reasoning extraction, and tool parsing.
-  Streamed assistant preambles match the history retained for the next request.
-- Pi timing fields: processed tokens, measured prefill wall time, PP tokens/sec,
+- Prompt-cache repair across assistant/tool round trips, including streamed
+  preambles, reasoning extraction, JSON argument reformatting, and tool parsing.
+- Pi-compatible processed-token counts, measured prefill wall time, PP tokens/sec,
   and actual cached tokens. TTFT is reported separately.
-- Native temperature, top-k, top-p, min-p, seed handling, and probability-based
-  MTP acceptance/rejection with residual sampling. Temperature zero keeps the
-  upstream greedy path.
-- A portable alias router that changes only the request's model ID and relays
-  response bytes, including all timing and usage extensions, unchanged.
-- Tests, pinned upstream overlay, setup instructions, and example Pi/router configs.
+- An authenticated model-alias router that translates the request model ID and
+  passes response bytes, including timing/cache/usage extensions, unchanged.
+- Tests, example Pi/router configs, upstream licenses, revisions, and file hashes.
 
 ## Install and build
 
-Serving requires Linux, an RTX 5090, a suitable NVIDIA driver, CUDA Toolkit 13.1,
-CMake, Git, and a Python environment with Qwentin's pinned runtime dependencies.
-CPU tests and the optional router work without a GPU. Python 3.10+ is supported
-by this package; the inference profile was exercised on Python 3.12.
+Inference requires Linux, an RTX 5090, a suitable NVIDIA driver, CUDA Toolkit 13.1,
+CMake, a C++ compiler, and Python 3.10+. The inference profile was exercised on
+Python 3.12. CPU tests and the router also run without a GPU.
 
 ```sh
 git clone https://github.com/cuylerstuwe/quinlan.git
 cd quinlan
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install -e .
 
-git clone https://github.com/kacper-daftcode/qwentin.git vendor/qwentin
-git -C vendor/qwentin checkout --detach 8a626374912fe1e24649403423c1120ff58d8522
-python -m pip install 'torch==2.14.0+cu130' --index-url https://download.pytorch.org/whl/cu130
-python -m pip install -r vendor/qwentin/requirements.txt
-quinlan-patch vendor/qwentin
+# Explicit cu130 PyTorch pin; use the CUDA wheel index as well as PyPI.
+python -m pip install '.[inference]' --extra-index-url https://download.pytorch.org/whl/cu130
 
-# Set CUDA_NVCC to the nvcc executable from your CUDA 13.1 toolkit.
-cmake -S vendor/qwentin -B vendor/qwentin/build-qwen \
-  -DCMAKE_CUDA_COMPILER="$CUDA_NVCC" -DCMAKE_BUILD_TYPE=Release
-cmake --build vendor/qwentin/build-qwen --parallel 2
+# Point CUDACXX at nvcc from your CUDA 13.1 toolkit if it is not on PATH.
+quinlan-build
 ```
 
-The overlay checks the exact source revision and preflights all patch hunks.
-Reapplying it is harmless. Rebuild after applying or updating it. An existing
-unpatched Qwentin library lacks the `quinlan_*` sampling ABI and will not work.
-Use a separate checkout/environment when another service depends on Qwentin.
+That is the only source checkout needed. An unpacked source archive works too;
+Git is not used by the build or server. `quinlan-build` compiles the included
+engine and prints the library path. By default, build output goes in a source-keyed
+user cache, leaving the installed sources writable only when you choose to edit
+them. Set `QUINLAN_BUILD_DIR` for a shared custom build directory. If using
+`quinlan-build --build-dir build`, pass `--lib build/libforward_qwen.so` to the server.
+The repository also supports `cmake -S . -B build` with the correct CUDA compiler.
+
+```sh
+# Verify all bundled source and asset hashes without CUDA:
+quinlan-build --verify-only
+
+# Router-only or CPU development installation:
+python -m pip install -e '.[dev]'
+```
+
+The sampling and scheduler changes are already applied in the bundled engine.
+`quinlan-patch` remains a compatibility utility for an old external Qwentin
+checkout; normal Quinlan builds do not call it. The CUDA build contains no
+FetchContent, ExternalProject, or source-download step.
 
 ## Serve
 
-Supply a compatible exported TQF file and the corresponding local tokenizer/model
-directory. Weights are not included. See [conversion](docs/conversion.md) for the
-tested recipe and source pins.
+Supply a compatible exported TQF and its matching tokenizer/model directory.
+Weights are not included. See [conversion](docs/conversion.md) for the included
+conversion commands and exact source pins.
 
 ```sh
 mkdir -p secrets
 chmod 700 secrets
 python -c 'import pathlib,secrets; p=pathlib.Path("secrets/backend.key"); p.touch(mode=0o600,exist_ok=False); p.write_text(secrets.token_urlsafe(32)+"\n")'
 
-# Set MODEL_DIR to the local model/tokenizer directory and MODEL_TQF to its TQF.
-quinlan-serve \
-  --source vendor/qwentin \
-  --model-dir "$MODEL_DIR" \
-  --tqf "$MODEL_TQF" \
+# Set MODEL_DIR and MODEL_TQF to your local tokenizer directory and export.
+quinlan-serve --model-dir "$MODEL_DIR" --tqf "$MODEL_TQF" \
   --api-key-file secrets/backend.key
 ```
 
-The backend listens on `127.0.0.1:8000`. `--model-id`, `--host`, `--port`,
-`--context-window`, `--max-output`, `--num-blocks`, `--no-spec`, `--spec-k`,
-`--draft-vocab`, and `--spec-sampling` are configurable; see `quinlan-serve --help`.
-The default pool is 2,200 blocks of 128 tokens. Lower contexts must be multiples
+The server automatically selects the included scheduler and `quinlan-build` output.
+It listens on `127.0.0.1:8000`. Model ID, bind address/port, context/output limits,
+KV block count, speculation mode/depth and draft vocabulary are configurable;
+see `quinlan-serve --help`. `--source` and `--lib` are optional advanced overrides.
+
+The default KV pool is 2,200 blocks of 128 tokens. Lower contexts must be multiples
 of 128. Startup verifies effective context, embedding placement, state precision,
-KV format, and disabled host parking.
+KV format, and disabled host parking. Prompt plus requested output must fit the
+context window.
 
 `GET /health` on the backend is unauthenticated and exposes numeric counters and
 configuration, not prompts. Keep it on a trusted interface. Both services use
-plain HTTP; use your own TLS proxy or private tunnel for remote access. Neither
-service configures a firewall, certificates, system services, or public ingress.
+plain HTTP; provide your own TLS proxy or private tunnel for remote access.
+The package does not configure system services, a firewall, or public ingress.
 
-## Optional router and Pi
+## Router and Pi
 
-The router can run on the inference host or another trusted machine. Its
-configuration names environment variables instead of containing credentials.
+The router is part of this package and can run on the inference host or another
+trusted machine. Its config names environment variables rather than credentials.
 
 ```sh
 export QUINLAN_BACKEND_KEY="$(cat secrets/backend.key)"
@@ -99,57 +114,54 @@ export QUINLAN_ROUTER_KEY="$(python -c 'import secrets; print(secrets.token_urls
 quinlan-router examples/router.json
 ```
 
-Change the example's backend URL if it runs elsewhere. Its `/v1/models` exposes
-the `qwen-local` alias. Chat response `model` fields retain the backend's model ID;
-the response body/SSE is passed through unchanged. The router does not retry,
-fail over, or reformat conversation history. It is a standalone extraction for
-this integration; deployment-specific scheduling and native pause/resume
-controllers are outside this package.
+The example exposes `qwen-local` at `http://127.0.0.1:8787/v1`. Change its backend
+URL for a separate host. Response `model` fields retain the backend model ID;
+JSON/SSE response bytes pass through unchanged. The router does not retry, fail
+over, or reformat history. Deployment-specific priority controllers are outside
+the supported profile.
 
 [examples/pi-provider.json](examples/pi-provider.json) is a provider fragment for
-Pi's `models.json`. Merge it into your existing configuration, and make
-`QUINLAN_ROUTER_KEY` available to Pi. For a remote router, update the base URL.
-Use a context window and output limit that match the server. Pi's usage accounting
-receives `usage.prompt_tokens_details.cached_tokens`; a timing extension that
-understands llama.cpp-style `timings` can display measured PP. The timing
-extension itself is not bundled.
+Pi's `models.json`. Merge it into your existing config and make
+`QUINLAN_ROUTER_KEY` available to Pi. Keep the context window/output limit aligned
+with the server. Pi receives `usage.prompt_tokens_details.cached_tokens`; a
+Pi timing extension that understands llama.cpp-style `timings` can display PP.
+The extension itself is not required for inference and is not bundled.
 
-See [API and compatibility details](docs/compatibility.md) for fields, cache
-semantics, and supported behavior.
+See [API and cache details](docs/compatibility.md).
 
-## Test
+## Test and provenance
 
 ```sh
+python -m pip install -e '.[dev]'
 python -m unittest discover -s tests -p 'test_*.py' -v
+python -m pytest src/quinlan/_vendor/qwentin/tests -q
 
-# Also verify patch application, conflict handling and parser provenance:
-QWENTIN_SOURCE="$PWD/vendor/qwentin" \
-  python -m unittest discover -s tests -p 'test_*.py' -v
-
-# Also run the real-tokenizer cache regressions (no inference or GPU required):
+# Also exercise exact cache round trips with the real tokenizer; no GPU needed:
 python -m pip install '.[tokenizer]'
-QWENTIN_MODEL_DIR="$MODEL_DIR" QWENTIN_SOURCE="$PWD/vendor/qwentin" \
-  python -m unittest discover -s tests -p 'test_*.py' -v
+QWENTIN_MODEL_DIR="$MODEL_DIR" python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-GPU oracle tests are opt-in; see [validation](docs/validation.md). CI runs CPU HTTP,
-telemetry, router, and pinned-overlay checks. It does not download model weights or
-claim GPU qualification.
+CI uses the included sources; it does not clone upstream repositories. GPU oracle
+and native build checks are described in [validation](docs/validation.md).
 
-## Scope and privacy
+Source layout:
 
-This is an experimental, pinned integration, not a complete OpenAI API server.
-It serves text chat and tool calls, one active sequence, with no vision,
-embeddings endpoint, persistent conversation storage, native priority scheduling,
-or enforced JSON grammar. It retains bounded token/template history in RAM and
-the engine's GPU prefix state. Restarting, eviction, interleaving conversations,
-or editing history can legitimately cause a cold prefill.
+| Location | Contents |
+| --- | --- |
+| `src/quinlan/` | API, cache/telemetry, router, build/conversion entry points |
+| `src/quinlan/_vendor/qwentin/` | Inference engine, scheduler, TQF/conversion tools, tests/assets |
+| `src/quinlan/_vendor/exllamav3/` | Quantizer/library source, CUDA extension source, runtime assets |
+| `src/quinlan/_vendor/SOURCES.json` | Original revisions, upstream hashes and integrated-file hashes |
+| `CMakeLists.txt` | Top-level build for the included engine |
 
-The repository contains portable source and synthetic fixtures. Credentials,
-private network addresses, hostnames, personal paths, conversation logs, raw
-deployment evidence, model weights, binaries, and private deployment configuration
-are excluded. The services avoid logging request text, tool arguments, and
-authorization headers. `.gitignore` provides a guardrail; review staged files
-before publishing your own configuration or evidence.
+The upstream commits and modifications are documented in
+[third-party notices](THIRD_PARTY_NOTICES.md). Public upstream codebooks and draft vocabulary are included. Model weights,
+calibration datasets and raw deployment logs are not distributed. Credentials, private addresses/hostnames/paths, and personal
+configuration are excluded. Commit metadata uses a neutral contributor identity.
 
-MIT license; see [third-party notices](THIRD_PARTY_NOTICES.md).
+This is an experimental text-chat/tool integration with one active sequence. It
+has no vision or embeddings endpoint, enforced JSON grammar, persistent
+conversation storage, or native priority scheduling. Token/template history is
+bounded in RAM. Restarting, eviction, interleaving conversations, or genuine
+history edits can legitimately cause a cold prefill. MIT license; bundled
+components retain their own notices and licenses.
