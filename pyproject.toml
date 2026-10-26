@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quinlan"
+version = "0.1.0"
+description = "Qwentin serving with OpenAI-style chat, exact token history, and Pi prefill telemetry"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+dependencies = []
+
+[project.optional-dependencies]
+tokenizer = ["transformers==5.17.0", "tokenizers==0.23.2", "jinja2>=3.1.6"]
+
+[project.scripts]
+quinlan-serve = "quinlan.server:main"
+quinlan-router = "quinlan.router:main"
+quinlan-patch = "quinlan.patch:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+quinlan = ["native/*.cuh", "native/*.patch"]

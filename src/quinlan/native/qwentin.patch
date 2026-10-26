@@ -1,0 +1,152 @@
+--- a/src/forward_qwen.cu
++++ b/src/forward_qwen.cu
+@@ -7,6 +7,7 @@
+  */
+ #include "qwentin.h"
+ #include "engine/base.cuh"
++#include "engine/quinlan_sampling.cuh"
+ #include "engine/config.cuh"
+ #include "engine/kv_cache.cuh"
+ #include "engine/t4_kv.cuh"
+--- a/src/engine/paged_graph.cuh
++++ b/src/engine/paged_graph.cuh
+@@ -173,6 +173,12 @@
+     if (ret == 1) ret = run_paged_decode_step_core(tokens, slot_ids, positions, N);
+     g_pdl_on = g_pdl_small = 0;
+     if (ret != 0) return ret;
++    if (paged_lm_head_wide()) {
++        int sr = quinlan_sampling_apply(g_pg_argmax, g_pg_logits, g_qwen.V, N, slot_ids, positions, g_qwen.stream);
++        if (sr) return sr;
++    } else {
++        for (int c = 0; c < N; c++) if (quinlan_params[slot_ids[c]].temperature > 0) return -128;
++    }
+     if (out_argmax)
+         cudaMemcpyAsync(out_argmax, g_pg_argmax, (size_t)N * sizeof(int), cudaMemcpyDeviceToHost, g_qwen.stream);
+     return cudaStreamSynchronize(g_qwen.stream) == cudaSuccess ? 0 : -9;
+@@ -490,6 +496,17 @@
+                                 cudaMemcpyDeviceToDevice, g_qwen.stream);
+             }
+         }
++        int sample_slots[256], sample_pos[256];
++        for (int f = 0; f < Kf; f++) {
++            int k = fk[f]; sample_slots[f] = seg_slot[k];
++            sample_pos[f] = col_pos[seg_off[k] + seg_len[k] - 1];
++        }
++        if (paged_lm_head_wide()) {
++            int sr = quinlan_sampling_apply(g_pg_argmax, g_pg_logits, g_qwen.V, Kf, sample_slots, sample_pos, g_qwen.stream);
++            if (sr) return sr;
++        } else {
++            for (int f = 0; f < Kf; f++) if (quinlan_params[sample_slots[f]].temperature > 0) return -128;
++        }
+         int htmp[256];
+         cudaMemcpyAsync(htmp, g_pg_argmax, (size_t)Kf * sizeof(int), cudaMemcpyDeviceToHost, g_qwen.stream);
+         cudaStreamSynchronize(g_qwen.stream);
+--- a/src/engine/paged_spec.cuh
++++ b/src/engine/paged_spec.cuh
+@@ -583,6 +583,8 @@
+     if (ret != 0) { cudaStreamSynchronize(g_qwen.stream); return ret; }
+     g_vf_K = K; g_vf_T = T;
+     for (int k = 0; k < K; k++) h_vf_done[k] = 0;
++    int sr = quinlan_spec_verify(g_vf_argmax, g_vf_logits, g_qwen.V, T, tokens, col_slot, col_pos, g_qwen.stream);
++    if (sr) return sr;
+     if (out_argmax)
+         cudaMemcpyAsync(out_argmax, g_vf_argmax, (size_t)T * sizeof(int), cudaMemcpyDeviceToHost, g_qwen.stream);
+     return cudaStreamSynchronize(g_qwen.stream) == cudaSuccess ? 0 : -10;
+@@ -902,6 +904,8 @@
+         if (paged_ensure_blocks(slot, pos + K - 1) != 0) return -7;
+         if (pos > max_pos) max_pos = pos;
+     }
++    int ns = quinlan_draft_begin(slot_ids, positions, N, K, g_qwen.V, g_qwen.stream);
++    if (ns) return ns;
+     for (int i = 0; i < N; i++) { h_mtp_ctl[0][i] = slot_ids[i]; h_mtp_ctl[1][i] = seeds[i]; h_mtp_ctl[2][i] = slot_ids[i]; }
+     for (int k = 0; k < K; k++) for (int i = 0; i < N; i++) h_mtp_ctl[3 + k][i] = positions[i] + k;
+     paged_upload_tables(g_qwen.stream);
+@@ -912,7 +916,7 @@
+     // TQ_GRAPH: the K chained steps as one graph per (N, K, the key-split counts of the K steps: S is monotone in
+     // the position and moves at most once inside K <= 16 consecutive positions -> (S_0, first step with S_0 + 1)).
+     int use_graph = 0;
+-    if (g_cfg.graph >= 2 && !g_graph_disabled && g_cfg.paged_topk_pages == 0 &&
++    if (!quinlan_spec_round && g_cfg.graph >= 2 && !g_graph_disabled && g_cfg.paged_topk_pages == 0 &&
+         g_cfg.paged_attn_mma && (g_pg_page & 127) == 0 && g_qwen.hd == 256 &&
+         g_qwen.nh % g_qwen.nkv == 0 && g_qwen.nh / g_qwen.nkv <= 16) {
+         int S0 = paged_attn_split_S(N, max_pos, 1), jump = K, Smax = S0, ok = 1;
+@@ -1001,6 +1005,10 @@
+             tq_launch(g_pdl_small, k_tq_batched_argmax, dim3(N), dim3(256), 0, g_qwen.stream,
+                       g_mtp_draft_d + (size_t)k * g_pg_maxslots, g_pg_logits, g_qwen.V, N);
+         }
++        int ns = quinlan_draft_step(g_mtp_draft_d + (size_t)k * g_pg_maxslots, g_pg_logits,
++            g_qwen.draft_on ? (const float *)g_qwen.d_draft_d2t : nullptr,
++            g_qwen.draft_on ? g_qwen.draft_V : g_qwen.V, N, k, g_qwen.stream);
++        if (ns) return ns;
+     }
+     return ret;
+ }
+--- a/src/engine/paged_t4.cuh
++++ b/src/engine/paged_t4.cuh
+@@ -711,7 +711,7 @@
+     return 0;
+ }
+ 
+-extern "C" int qwn_paged_free(void) { paged_free_all(); return 0; }
++extern "C" int qwn_paged_free(void) { quinlan_sampling_free(); paged_free_all(); return 0; }
+ 
+ // Free a slot's blocks back to the pool and zero its DeltaNet state (slot is now reusable).
+ extern "C" int qwn_paged_reset_slot(int slot) {
+--- a/tools/serve_batched.py
++++ b/tools/serve_batched.py
+@@ -240,7 +240,7 @@
+ class Request:
+     __slots__ = ("ids", "max_new", "eos", "out", "done", "slot", "pos", "next_tok",
+                  "started", "t_admit", "t_first", "t_done", "n_prompt", "err",
+-                 "start", "tokens", "t_submit")
++                 "start", "tokens", "t_submit", "sampling")
+ 
+     def __init__(self, ids, max_new, eos):
+         self.ids = ids; self.max_new = max_new; self.eos = set(eos)
+@@ -373,8 +373,9 @@
+         ck(self.L.qwn_paged_stats(ctypes.byref(fb), ctypes.byref(tb), ctypes.byref(pg), ctypes.byref(mb)), "stats")
+         return fb.value, tb.value, pg.value, mb.value
+ 
+-    def submit(self, ids, max_new, eos):
++    def submit(self, ids, max_new, eos, sampling=None):
+         req = Request(ids, max_new, eos)
++        req.sampling = sampling or (0.0, 1.0, 0, 0.0, 0)
+         with self.cv:
+             self.q.append(req)
+             self.cv.notify()
+@@ -481,13 +482,13 @@
+         best = None
+         for slot, p in self.parked.items():
+             c = p["consumed"]
+-            if c <= 0 or len(ids) < c or c < self.page:
++            if c <= 0 or len(ids) <= c or c < self.page:
+                 continue                            # too short to be worth a continuation
+             if ids[:c] == p["ids"][:c] and (best is None or c > best[2]):
+                 best = ("gpu", slot, c)
+         for key, h in self.host_parked.items():
+             c = h["consumed"]
+-            if len(ids) < c or c < self.page:
++            if len(ids) <= c or c < self.page:
+                 continue
+             if ids[:c] == h["ids"][:c] and (best is None or c > best[2]):
+                 best = ("host", key, c)
+@@ -689,6 +690,11 @@
+                             self.free_slots.append(slot); break
+             self.q.pop(0)
+             req.start = start
++            T, p, k, mp, seed = req.sampling
++            fn = self.L.quinlan_sampling_configure
++            fn.argtypes = [ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_uint64, ctypes.c_int]
++            fn.restype = ctypes.c_int
++            ck(fn(slot, T, p, k, mp, seed, req.n_prompt), "sampling_configure")
+             free_blk -= need
+             if self.log_admits:
+                 print(f"[admit] slot {slot} prompt {req.n_prompt} cached {start} new {n_new} max_new {req.max_new} "
+@@ -783,6 +789,7 @@
+                         break
+         else:
+             k = int(self.spec_k)
++        k = min(k, max(0, self.max_blocks_per_seq * self.page - max_pos - 1))
+         while k > 0 and n * (k + 1) > SPEC_MAX_T:
+             k -= 1
+         return k

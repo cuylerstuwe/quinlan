@@ -1,0 +1,27 @@
+{
+  "providers": {
+    "quinlan": {
+      "baseUrl": "http://127.0.0.1:8787/v1",
+      "apiKey": "QUINLAN_ROUTER_KEY",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "qwen-local",
+          "name": "Qwen local via Quinlan",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 262144,
+          "maxTokens": 32768,
+          "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+          "compat": {
+            "supportsStore": false,
+            "supportsDeveloperRole": false,
+            "supportsReasoningEffort": true,
+            "supportsUsageInStreaming": true,
+            "thinkingFormat": "qwen"
+          }
+        }
+      ]
+    }
+  }
+}

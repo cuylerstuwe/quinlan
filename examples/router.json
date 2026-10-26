@@ -1,0 +1,14 @@
+{
+  "host": "127.0.0.1",
+  "port": 8787,
+  "api_key_env": "QUINLAN_ROUTER_KEY",
+  "routes": {
+    "qwen-local": {
+      "base_url": "http://127.0.0.1:8000/v1",
+      "model": "qwen3.8-27b-qwentin-opt5.75-256k",
+      "api_key_env": "QUINLAN_BACKEND_KEY",
+      "context_window": 262144,
+      "max_output_tokens": 32768
+    }
+  }
+}
